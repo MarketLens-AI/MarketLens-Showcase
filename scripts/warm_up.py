@@ -207,7 +207,8 @@ def run_forecast(ticker: str, prices: list, events: list) -> None:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def warm_up(tickers: list[str]) -> None:
+def warm_up(tickers: list[str], *, skip_sentiment: bool = False,
+            skip_forecast: bool = False) -> None:
     wall_start = time.time()
     print(f"\nMarketLens warm_up — {date.today()}")
     print(f"Tickers: {', '.join(tickers)}\n")
@@ -225,8 +226,16 @@ def warm_up(tickers: list[str]) -> None:
             continue
 
         events = refresh_news(ticker)
-        run_sentiment(ticker, events, prices[-1].date)
-        run_forecast(ticker, prices, events)
+
+        if not skip_sentiment:
+            run_sentiment(ticker, events, prices[-1].date)
+        else:
+            print(f"  [Sentiment] Skipped (--no-sentiment)")
+
+        if not skip_forecast:
+            run_forecast(ticker, prices, events)
+        else:
+            print(f"  [Forecast] Skipped (--no-forecast)")
 
         print(f"  [{ticker}] Done in {_fmt(time.time()-t_start)}.\n")
 
@@ -239,5 +248,14 @@ if __name__ == "__main__":
         "tickers", nargs="*", default=DEFAULT_TICKERS,
         help="Ticker symbols to refresh (default: META)",
     )
+    parser.add_argument(
+        "--no-sentiment", action="store_true",
+        help="Skip FinBERT sentiment analysis",
+    )
+    parser.add_argument(
+        "--no-forecast", action="store_true",
+        help="Skip Transformer + TFT forecast training",
+    )
     args = parser.parse_args()
-    warm_up(args.tickers)
+    warm_up(args.tickers, skip_sentiment=args.no_sentiment,
+            skip_forecast=args.no_forecast)
