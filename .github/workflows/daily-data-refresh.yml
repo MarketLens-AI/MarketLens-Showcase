@@ -1,0 +1,52 @@
+name: Daily Data Refresh
+
+on:
+  schedule:
+    # Run at 21:30 UTC (17:30 ET) every weekday, ~30 min after US market close
+    - cron: '30 21 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      tickers:
+        description: 'Ticker symbols (space-separated)'
+        required: false
+        default: 'META'
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install minimal dependencies
+        run: |
+          pip install yfinance pandas numpy finnhub-python python-dotenv requests
+
+      - name: Create .env from secrets
+        run: |
+          echo "FINNHUB_API_KEY=${{ secrets.FINNHUB_API_KEY }}" > .env
+
+      - name: Run data refresh (prices + news only)
+        run: |
+          TICKERS="${{ github.event.inputs.tickers || 'META' }}"
+          python scripts/warm_up.py $TICKERS --no-sentiment --no-forecast
+
+      - name: Commit and push updated cache
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data_cache/
+          if git diff --cached --quiet; then
+            echo "No data changes to commit."
+          else
+            git commit -m "Auto-update price and news data $(date -u +%Y-%m-%d)"
+            git push
+          fi
